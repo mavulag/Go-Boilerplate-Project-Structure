@@ -1,0 +1,44 @@
+version: "3.9"
+services:
+  trilabs_app:
+    build:
+      dockerfile: Dockerfile
+      context: .
+      target: dev # This is the same dev that is in our Dockerfile stages
+    volumes:
+      - .:/opt/app/api
+    environment:
+      API_SERVER_ADDR: ":3000"
+      DATABASE_URL: postgres://admin@db/trilabs_db?sslmode=disable
+    ports:
+      - "3000:3000"
+    links:
+      - trilabs_db
+
+  trilabs_db:
+    image: postgres:13-alpine
+    volumes:
+      - data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: trilabs_db
+      POSTGRES_USER: admin
+      POSTGRES_HOST_AUTH_METHOD: trust
+
+  migrate: &basemigrate
+    profiles: [ "tools" ]
+    image: migrate/migrate
+    entrypoint: "migrate -database postgresql://admin@db/trilabs_db?sslmode=disable -path /tmp/migrations"
+    command: up
+    links:
+      - trilabs_db
+    volumes:
+      - ./migrations:/tmp/migrations
+
+  create-migration:
+    <<: *basemigrate
+    entrypoint: migrate create -dir /tmp/migrations -ext sql
+    command: ""
+
+volumes:
+  # We use this created volume to store our database data into, so when we stop our containers, the information created isn't lost
+  data:
